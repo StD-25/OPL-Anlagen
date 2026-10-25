@@ -1,6 +1,6 @@
-// Fachlogik: Berichte, Punkte (offene Punkte/Aufgaben), Fotos, Personen, Einstellungen.
+// Fachlogik: Benutzer, Anlagen, Berichte, Punkte (offene Punkte/Aufgaben), Fotos, Personen, Einstellungen.
 import * as db from './core/db.js';
-import { REASONS, AREAS, PHOTO_FULL, PHOTO_THUMB } from './config.js';
+import { REASONS, GEWERKE, ROLES, PHOTO_FULL, PHOTO_THUMB } from './config.js';
 import { resizeImage } from './core/image.js';
 import { formatDate, formatDateTime, todayISO } from './core/filename.js';
 
@@ -17,10 +17,11 @@ export function reportTitle(report) {
 // Grund ohne Datum, z.B. für Filter im Archiv
 export const reportGroup = (report) => (report.reason === 'kurznachricht' ? 'Kurznachricht' : reportTitle(report));
 
-// Berichtsname mit Datum – bei Kurznachrichten steckt das Datum schon im Titel
+// Berichtsname mit Anlage und Datum – bei Kurznachrichten steckt das Datum schon im Titel
 export function reportLabel(report) {
   const title = reportTitle(report);
-  return report.reason === 'kurznachricht' ? title : `${title} ${formatDateTime(report.createdAt)}`;
+  const withDate = report.reason === 'kurznachricht' ? title : `${title} ${formatDateTime(report.createdAt)}`;
+  return report.anlageNr ? `${report.anlageNr} · ${withDate}` : withDate;
 }
 
 export const reportFileBase = (report) => (report.reason === 'kurznachricht' ? 'Kurznachricht' : reportTitle(report));
@@ -38,39 +39,128 @@ export async function listReasons() {
 
 export const saveReasons = (list) => setSetting('reasons', list);
 
-// ---- Bereiche (in den Einstellungen änderbar; „Sonstiges“ ist immer zusätzlich verfügbar) ----
-export async function listAreas() {
-  return (await getSetting('areas', null)) || [...AREAS];
+// ---- Gewerke (in den Einstellungen änderbar) ----
+export async function listGewerke() {
+  return (await getSetting('gewerke', null)) || [...GEWERKE];
 }
 
-export const saveAreas = (list) => setSetting('areas', list);
+export const saveGewerke = (list) => setSetting('gewerke', list);
 
 export const newestFirst = (a, b) => b.createdAt - a.createdAt;
 
+// ---- Benutzer: { id, name, role, pin, anlagen: [anlageId] } ----
+export const roleLabel = (role) => ROLES.find((r) => r.id === role)?.label || role;
+
+const RIGHTS = {
+  admin: ['users', 'anlagen', 'lists', 'deleteReport', 'backup', 'allAnlagen'],
+  projektleiter: ['anlagen', 'lists', 'deleteReport'],
+  benutzer: [],
+};
+
+// Darf der Benutzer das? users = Benutzerverwaltung, anlagen = Anlagen anlegen,
+// lists = Gründe/Gewerke/Personen pflegen, deleteReport, backup, allAnlagen = alle Anlagen sehen
+export const can = (user, right) => !!user && !!RIGHTS[user.role]?.includes(right);
+
+export async function listUsers() {
+  return ((await getSetting('users', null)) || []).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+}
+
+export const getUser = async (id) => (await listUsers()).find((u) => u.id === id) || null;
+
+export async function saveUser(user) {
+  const users = await listUsers();
+  if (!user.id) user.id = db.uid();
+  const i = users.findIndex((u) => u.id === user.id);
+  if (i >= 0) users[i] = user; else users.push(user);
+  await setSetting('users', users);
+  await addPersons([user.name]);
+  return user;
+}
+
+export async function deleteUser(id) {
+  await setSetting('users', (await listUsers()).filter((u) => u.id !== id));
+  if ((await getSetting('currentUserId')) === id) await logout();
+}
+
+export const countAdmins = async () => (await listUsers()).filter((u) => u.role === 'admin').length;
+
+export async function getCurrentUser() {
+  const id = await getSetting('currentUserId');
+  return id ? getUser(id) : null;
+}
+
+export const login = (id) => setSetting('currentUserId', id);
+export const logout = () => setSetting('currentUserId', '');
+
+// ---- Anlagen: { id, nr, name } ----
+export const anlageLabel = (a) => (a ? [a.nr, a.name].filter(Boolean).join(' – ') : '');
+
+export async function listAnlagen() {
+  return ((await getSetting('anlagen', null)) || [])
+    .sort((a, b) => a.nr.localeCompare(b.nr, 'de', { numeric: true }));
+}
+
+export const getAnlage = async (id) => (await listAnlagen()).find((a) => a.id === id) || null;
+
+export async function saveAnlage(anlage) {
+  const list = await listAnlagen();
+  if (!anlage.id) anlage.id = db.uid();
+  const i = list.findIndex((a) => a.id === anlage.id);
+  if (i >= 0) list[i] = anlage; else list.push(anlage);
+  await setSetting('anlagen', list);
+  return anlage;
+}
+
+export async function deleteAnlage(id) {
+  await setSetting('anlagen', (await listAnlagen()).filter((a) => a.id !== id));
+  const users = await listUsers();
+  for (const u of users) u.anlagen = (u.anlagen || []).filter((a) => a !== id);
+  await setSetting('users', users);
+}
+
+// Anlagen, die der Benutzer sehen darf (Administrator: alle, sonst die zugewiesenen)
+export async function visibleAnlagen(user) {
+  const all = await listAnlagen();
+  if (can(user, 'allAnlagen')) return all;
+  return all.filter((a) => (user?.anlagen || []).includes(a.id));
+}
+
+// Auf der Startseite gewählte Anlage (falls nicht mehr erlaubt: erste erlaubte)
+export async function currentAnlage(user) {
+  const visible = await visibleAnlagen(user);
+  const id = await getSetting('currentAnlageId');
+  return visible.find((a) => a.id === id) || visible[0] || null;
+}
+
+export const setCurrentAnlage = (id) => setSetting('currentAnlageId', id);
+
 // ---- Berichte ----
-export async function createReport({ reason, reasonLabel = '', customName, participants }) {
+export async function createReport({ reason, reasonLabel = '', customName, anlage, user }) {
   const report = {
     id: db.uid(),
     reason,
     reasonLabel,
     customName: customName || '',
-    participants: participants || '',
+    anlageId: anlage.id,
+    // Nummer und Name merken, damit spätere Umbenennungen alte Berichte nicht ändern
+    anlageNr: anlage.nr,
+    anlageName: anlage.name,
+    createdBy: user?.name || '',
     createdAt: Date.now(),
     status: 'open', // open | archived
     finishedAt: null,
     archivedAt: null,
   };
   await db.put('reports', report);
-  await addPersons(splitNames(participants));
   return report;
 }
 
 export const getReport = (id) => db.get('reports', id);
 export const saveReport = (r) => db.put('reports', r);
 
-export async function listReports(status) {
+export async function listReports(status, anlageId) {
   const all = await db.getAll('reports');
-  return all.filter((r) => r.status === status).sort(newestFirst);
+  return all.filter((r) => r.status === status && (!anlageId || r.anlageId === anlageId)).sort(newestFirst);
 }
 
 export async function deleteReport(id) {
@@ -114,10 +204,11 @@ export async function savePoint(point, { newFiles = [], removedPhotoIds = [] } =
   return point;
 }
 
-export async function setDone(point, done, note = '') {
+export async function setDone(point, done, note = '', user = null) {
   point.doneNote = done ? note : '';
   point.done = done;
   point.doneAt = done ? Date.now() : null;
+  point.doneBy = done ? user?.name || '' : '';
   return db.put('points', point);
 }
 
@@ -134,10 +225,10 @@ export async function getPhotos(pointId) {
 export const versionLabel = (n) => `V${String(n).padStart(2, '0')}`;
 
 export async function nextPdfVersion(report, points) {
-  const parts = [report.participants || ''];
+  const parts = [report.anlageNr || '', report.anlageName || ''];
   for (const p of [...points].sort((a, b) => a.no - b.no)) {
     const photos = await getPhotos(p.id);
-    parts.push([p.no, p.area, p.remark, p.assignee, p.dueDate, p.isTodo, p.done, p.doneNote || '', photos.length].join('|'));
+    parts.push([p.no, p.gewerk, p.remark, p.author, p.assignee, p.dueDate, p.isTodo, p.done, p.doneNote || '', photos.length].join('|'));
   }
   const signature = parts.join('\n');
   if (!report.pdfVersion || report.pdfSignature !== signature) {
@@ -152,25 +243,19 @@ export async function nextPdfVersion(report, points) {
 // Offen und Fälligkeitsdatum überschritten
 export const isOverdue = (p) => !!(p.isTodo && !p.done && p.dueDate && p.dueDate < todayISO());
 
-// ---- Kurznachricht: ein Bericht pro Tag, jede Nachricht eine offene Aufgabe ----
-export async function addQuickMessage({ author, text, area = '', assignee, dueDate, files = [] }) {
+// ---- Kurznachricht: ein Bericht pro Tag und Anlage, jede Nachricht eine offene Aufgabe ----
+export async function addQuickMessage({ user, anlage, text, gewerk = '', assignee, dueDate, files = [] }) {
   const today = formatDate(Date.now());
-  let report = (await listReports('open'))
+  let report = (await listReports('open', anlage.id))
     .find((r) => r.reason === 'kurznachricht' && formatDate(r.createdAt) === today);
-  if (!report) {
-    report = await createReport({ reason: 'kurznachricht', participants: author });
-  } else if (author && !splitNames(report.participants).includes(author)) {
-    report.participants = [report.participants, author].filter(Boolean).join(', ');
-    await saveReport(report);
-  }
-  if (author) await addPersons([author]);
+  if (!report) report = await createReport({ reason: 'kurznachricht', anlage, user });
   const point = {
     reportId: report.id,
-    area,
+    gewerk,
     remark: text,
     assignee,
     dueDate: dueDate || '',
-    author: author || '',
+    author: user?.name || '',
     isTodo: true,
   };
   return savePoint(point, { newFiles: files });
@@ -184,17 +269,17 @@ export async function getSetting(key, fallback = '') {
 
 export const setSetting = (key, value) => db.put('settings', { key, value });
 
-// ---- Aufgaben ----
-export async function listTodos() {
+// ---- Aufgaben (nur aus Berichten der angegebenen Anlagen) ----
+export async function listTodos(anlageIds) {
   const [points, reports] = await Promise.all([db.getAll('points'), db.getAll('reports')]);
-  const byId = Object.fromEntries(reports.map((r) => [r.id, r]));
+  const byId = Object.fromEntries(reports.filter((r) => anlageIds.includes(r.anlageId)).map((r) => [r.id, r]));
   return points
     .filter((p) => p.isTodo && byId[p.reportId])
     .map((p) => ({ ...p, report: byId[p.reportId] }))
     .sort(newestFirst);
 }
 
-// ---- Personen ----
+// ---- Personen (für die Zuständigkeit) ----
 export function splitNames(text) {
   return String(text || '').split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
 }
@@ -203,12 +288,12 @@ export async function addPersons(names) {
   for (const name of names) if (name) await db.put('persons', { name });
 }
 
-// Alle jemals eingetragenen Personen: Personenliste + Teilnehmer + Zuständige
+// Alle jemals eingetragenen Personen: Personenliste + Benutzer + Zuständige
 export async function listPersons() {
-  const [persons, reports, points] = await Promise.all([db.getAll('persons'), db.getAll('reports'), db.getAll('points')]);
+  const [persons, users, points] = await Promise.all([db.getAll('persons'), listUsers(), db.getAll('points')]);
   const names = [
     ...persons.map((p) => p.name),
-    ...reports.flatMap((r) => splitNames(r.participants)),
+    ...users.map((u) => u.name),
     ...points.map((p) => p.assignee),
   ].filter(Boolean);
   return [...new Set(names)].sort((a, b) => a.localeCompare(b, 'de'));

@@ -1,8 +1,8 @@
-// Anpassbare Konfiguration – für weitere Programme hier Gründe/Bereiche ändern.
+// Anpassbare Konfiguration – für weitere Programme hier Gründe/Gewerke ändern.
 export const APP_NAME = 'OPL-Maschine';
 
 // Bei jeder Änderung zusammen mit CACHE in service-worker.js erhöhen
-export const APP_VERSION = '2026-10-26.1';
+export const APP_VERSION = '2026-10-26.2';
 
 export const REASONS = [
   { id: 'safetywalk', label: 'Safety Walk', file: 'SafetyWalk' },
@@ -13,19 +13,15 @@ export const REASONS = [
   { id: 'kurznachricht', label: 'Kurznachricht', file: 'Kurznachricht', hidden: true },
 ];
 
-const range = (prefix, from, to) =>
-  Array.from({ length: to - from + 1 }, (_, i) => `${prefix} ${from + i}`);
+// Gewerk eines Punkts (in den Einstellungen änderbar)
+export const GEWERKE = ['Elektrik', 'Mechanik', 'Programmierung', 'Projektleitung', 'Fertigung', 'Konstruktion'];
 
-export const AREAS = [
-  ...range('Halle', 1, 8),
-  ...range('VB', 1, 17),
-  ...range('Station', 1, 4),
-  'Außenbereich',
-  'Parkplatz',
+// Rollen der Benutzerverwaltung
+export const ROLES = [
+  { id: 'admin', label: 'Administrator' },
+  { id: 'projektleiter', label: 'Projektleiter' },
+  { id: 'benutzer', label: 'Benutzer' },
 ];
-
-// Letzte Auswahl im Bereich: freier Text
-export const AREA_OTHER = 'Sonstiges';
 
 // Bildgrößen: Original für den Bilder-Export, Thumbnail für das PDF.
 export const PHOTO_FULL = { maxPx: 1600, quality: 0.8 };

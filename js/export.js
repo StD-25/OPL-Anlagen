@@ -5,6 +5,10 @@ import { blobToDataURL } from './core/image.js';
 import { buildFilename, formatDate, formatDateTime, formatDue, sanitize, stamp } from './core/filename.js';
 import { makeZip } from './core/share.js';
 
+// Dateiname beginnt mit der Anlagennummer, z.B. „4711_SafetyWalk_JJJJ-MM-TT_HH-MM_V01.pdf“
+const reportFilename = (report, ext, suffix) =>
+  `${report.anlageNr ? `${sanitize(report.anlageNr)}_` : ''}${buildFilename(model.reportFileBase(report), report.createdAt, ext, suffix)}`;
+
 async function thumbsFor(pointId) {
   const photos = await model.getPhotos(pointId);
   return Promise.all(
@@ -22,40 +26,45 @@ const statusText = (p) => {
   return `offen${p.dueDate ? `\nbis ${formatDue(p.dueDate)}` : ''}`;
 };
 
+// Datum/Zeit der Erfassung und wer den Punkt erfasst hat
+const createdText = (p) => `${formatDateTime(p.createdAt)}${p.author ? `\nvon ${p.author}` : ''}`;
+
 export async function reportPdf(report) {
   const points = (await model.getPoints(report.id)).sort((a, b) => a.no - b.no);
   const rows = [];
   for (const p of points) {
     rows.push({
-      cells: [String(p.no), formatDateTime(p.createdAt), p.area || '', p.remark || '', p.assignee || '', statusText(p), ''],
+      cells: [String(p.no), createdText(p), p.gewerk || '', p.remark || '', p.assignee || '', statusText(p), ''],
       images: await thumbsFor(p.id),
     });
   }
-  const title = model.reportTitle(report);
+  const title = `OPL ${report.anlageNr || ''} – ${model.reportTitle(report)}`;
   const version = model.versionLabel(await model.nextPdfVersion(report, points));
   const open = points.filter((p) => p.isTodo && !p.done).length;
   const done = points.filter((p) => p.isTodo && p.done).length;
   const blob = tablePdf({
     title,
     info: [
+      ['Anlage', [report.anlageNr, report.anlageName].filter(Boolean).join(' – ')],
+      ['Bericht', model.reportTitle(report)],
       ['Datum', formatDateTime(report.createdAt)],
+      ['Angelegt von', report.createdBy],
       ['Version', `${version} · Stand: ${formatDateTime(report.pdfAt)}`],
-      ['Teilnehmer', report.participants],
       ['Punkte', `${points.length} (offen: ${open}, erledigt: ${done})`],
     ],
     columns: [
-      { header: 'Nr.', width: 9 },
-      { header: 'Datum / Zeit', width: 20 },
-      { header: 'Bereich', width: 20 },
+      { header: 'Nr.', width: 8 },
+      { header: 'Erfasst', width: 21 },
+      { header: 'Gewerk', width: 29 },
       { header: 'Offener Punkt/Beschreibung' },
-      { header: 'Zuständig', width: 24 },
-      { header: 'Status', width: 30 },
+      { header: 'Zuständig', width: 21 },
+      { header: 'Status', width: 24 },
       { header: 'Foto', width: 22 },
     ],
     rows,
     imageColumn: 6,
   });
-  return { blob, filename: buildFilename(model.reportFileBase(report), report.createdAt, 'pdf', `_${version}`), title, version };
+  return { blob, filename: reportFilename(report, 'pdf', `_${version}`), title, version };
 }
 
 // Originalfotos (separat vom PDF) als ZIP mit gleichem Namensschema.
@@ -66,24 +75,24 @@ export async function reportImagesZip(report) {
     const photos = await model.getPhotos(p.id);
     photos.forEach((ph, i) => {
       entries.push({
-        name: `Punkt${String(p.no).padStart(2, '0')}_${sanitize(p.area)}_${i + 1}.jpg`,
+        name: `Punkt${String(p.no).padStart(2, '0')}_${sanitize(p.gewerk || 'Punkt')}_${i + 1}.jpg`,
         blob: ph.full,
       });
     });
   }
   if (!entries.length) return null;
   const blob = await makeZip(entries);
-  return { blob, filename: buildFilename(model.reportFileBase(report), report.createdAt, 'zip', `_${model.versionLabel(report.pdfVersion || 1)}_Bilder`), count: entries.length };
+  return { blob, filename: reportFilename(report, 'zip', `_${model.versionLabel(report.pdfVersion || 1)}_Bilder`), count: entries.length };
 }
 
-export async function todosPdf(todos, { person, status, search = '' }) {
+export async function todosPdf(todos, { anlage, gewerk, person, status, search = '' }) {
   const rows = [];
   for (const t of todos) {
     rows.push({
       cells: [
-        formatDateTime(t.createdAt),
-        model.reportLabel(t.report),
-        t.area || '',
+        createdText(t),
+        `${t.report.anlageNr || ''}\n${model.reportTitle(t.report)}`,
+        t.gewerk || '',
         t.remark || '',
         t.assignee || '',
         statusText(t),
@@ -94,20 +103,22 @@ export async function todosPdf(todos, { person, status, search = '' }) {
   }
   const who = person || 'Alle';
   const blob = tablePdf({
-    title: 'Aufgabenliste',
+    title: 'Offene Punkteliste – Aufgaben',
     info: [
+      ['Anlage', anlage],
+      ['Gewerk', gewerk],
       ['Zuständig', who],
       ['Status', status],
       ...(search ? [['Suche', search]] : []),
       ['Anzahl', String(todos.length)],
     ],
     columns: [
-      { header: 'Datum / Zeit', width: 20 },
-      { header: 'Bericht', width: 26 },
-      { header: 'Bereich', width: 19 },
+      { header: 'Erfasst', width: 21 },
+      { header: 'Anlage / Bericht', width: 20 },
+      { header: 'Gewerk', width: 29 },
       { header: 'Offener Punkt/Beschreibung' },
-      { header: 'Zuständig', width: 22 },
-      { header: 'Status', width: 30 },
+      { header: 'Zuständig', width: 20 },
+      { header: 'Status', width: 23 },
       { header: 'Foto', width: 22 },
     ],
     rows,

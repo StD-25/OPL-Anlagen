@@ -504,3 +504,6 @@ main#app.split .home-list {
   white-space: pre-wrap;
   word-wrap: break-word;
 }
+
+/* Anmeldeseite ohne Tab-Leiste */
+body.logged-out nav.tabbar { display: none; }

@@ -7,7 +7,7 @@ import { todosPdf } from '../export.js';
 
 const NONE = '__none__';
 const STATUS_LABEL = { open: 'Offen', done: 'Erledigt', all: 'Alle' };
-const filters = { person: '', status: 'open', search: '' }; // bleibt während der Sitzung erhalten
+const filters = { anlage: '', gewerk: '', person: '', status: 'open', search: '' }; // bleibt während der Sitzung erhalten
 
 async function todoCard(t, persons) {
   const photo = (await model.getPhotos(t.id))[0];
@@ -16,11 +16,11 @@ async function todoCard(t, persons) {
       <label class="check" style="margin:0;align-self:flex-start"><input type="checkbox" data-done="${t.id}" ${t.done ? 'checked' : ''} aria-label="erledigt"></label>
       ${photo ? `<div class="thumbs"><img class="thumb" src="${objectURL(photo.thumb)}" alt=""></div>` : ''}
       <div class="body">
-        <div>${t.area ? `<span class="badge">${esc(t.area)}</span>` : ''} <span class="badge ${t.done ? 'done' : 'open'}">${t.done ? 'erledigt' : 'offen'}</span>
+        <div><span class="badge">${esc(t.report.anlageNr || '')}</span> ${t.gewerk ? `<span class="badge">${esc(t.gewerk)}</span>` : ''} <span class="badge ${t.done ? 'done' : 'open'}">${t.done ? 'erledigt' : 'offen'}</span>
           ${t.dueDate ? `<span class="badge ${model.isOverdue(t) ? 'overdue' : ''}">bis ${formatDue(t.dueDate)}</span>` : ''}</div>
         <div class="remark">${esc(t.remark)}</div>
         ${t.done && t.doneNote ? `<div class="done-note">✓ Bemerkung: ${esc(t.doneNote)}</div>` : ''}
-        <div class="meta">${formatDateTime(t.createdAt)} · <a href="#/report/${t.reportId}/point/${t.id}">${esc(model.reportLabel(t.report))}</a></div>
+        <div class="meta">${formatDateTime(t.createdAt)}${t.author ? ` · von ${esc(t.author)}` : ''} · <a href="#/report/${t.reportId}/point/${t.id}">${esc(model.reportLabel(t.report))}</a></div>
         <select data-assign="${t.id}" style="margin-top:8px">
           <option value="">– nicht zugewiesen –</option>
           ${persons.map((p) => `<option ${p === t.assignee ? 'selected' : ''}>${esc(p)}</option>`).join('')}
@@ -32,11 +32,17 @@ async function todoCard(t, persons) {
 export async function render() {
   setHeader('Aufgaben');
   setActiveTab('todos');
-  const all = await model.listTodos(); // neueste oben
+  const user = await model.getCurrentUser();
+  const anlagen = await model.visibleAnlagen(user);
+  const gewerke = await model.listGewerke();
+  if (filters.anlage && !anlagen.some((a) => a.id === filters.anlage)) filters.anlage = '';
+  const all = await model.listTodos(anlagen.map((a) => a.id)); // neueste oben
   const persons = [...new Set([...(await model.listPersons()), ...all.map((t) => t.assignee).filter(Boolean)])]
     .sort((a, b) => a.localeCompare(b, 'de'));
 
   const byFilters = all.filter((t) =>
+    (!filters.anlage || t.report.anlageId === filters.anlage) &&
+    (!filters.gewerk || t.gewerk === filters.gewerk) &&
     (filters.status === 'all' || (filters.status === 'done') === !!t.done) &&
     (!filters.person || (filters.person === NONE ? !t.assignee : t.assignee === filters.person)));
   // Suche im Text „Offener Punkt/Beschreibung“, Groß-/Kleinschreibung egal
@@ -47,6 +53,16 @@ export async function render() {
 
   app().innerHTML = `
     <div class="filters">
+      <select id="fAnlage">
+        <option value="">Alle Anlagen</option>
+        ${anlagen.map((a) => `<option value="${a.id}" ${a.id === filters.anlage ? 'selected' : ''}>${esc(model.anlageLabel(a))}</option>`).join('')}
+      </select>
+      <select id="fGewerk">
+        <option value="">Alle Gewerke</option>
+        ${[...new Set([...gewerke, ...all.map((t) => t.gewerk).filter(Boolean)])].map((g) => `<option ${g === filters.gewerk ? 'selected' : ''}>${esc(g)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="filters" style="margin-top:8px">
       <select id="fPerson">
         <option value="">Alle Personen</option>
         <option value="${NONE}" ${filters.person === NONE ? 'selected' : ''}>Ohne Zuständigkeit</option>
@@ -85,7 +101,7 @@ export async function render() {
           note = await askDoneNote();
           if (note === null) { cb.checked = false; return; } // abgebrochen
         }
-        await model.setDone(p, cb.checked, note);
+        await model.setDone(p, cb.checked, note, user);
         toast(cb.checked ? 'Als erledigt markiert' : 'Wieder offen');
         render();
       };
@@ -101,13 +117,16 @@ export async function render() {
     });
   }
 
+  document.getElementById('fAnlage').onchange = (e) => { filters.anlage = e.target.value; render(); };
+  document.getElementById('fGewerk').onchange = (e) => { filters.gewerk = e.target.value; render(); };
   document.getElementById('fPerson').onchange = (e) => { filters.person = e.target.value; render(); };
   document.getElementById('fStatus').onchange = (e) => { filters.status = e.target.value; render(); };
   document.getElementById('fSearch').oninput = (e) => { filters.search = e.target.value; renderList(); };
 
   pdfBtn.onclick = async () => {
     const person = filters.person === NONE ? 'Ohne Zuständigkeit' : filters.person;
-    const pdf = await todosPdf(matches(), { person, status: STATUS_LABEL[filters.status], search: filters.search.trim() });
+    const anlage = model.anlageLabel(anlagen.find((a) => a.id === filters.anlage)) || 'Alle';
+    const pdf = await todosPdf(matches(), { anlage, gewerk: filters.gewerk || 'Alle', person, status: STATUS_LABEL[filters.status], search: filters.search.trim() });
     await showPdfPreview({ blob: pdf.blob, filename: pdf.filename, actions: [
       { label: '✉ Per E-Mail senden', run: () => shareFile(pdf.blob, pdf.filename, { title: pdf.title, text: `Anbei die ${pdf.title}.` }) },
       { label: '⤓ PDF speichern', cls: 'secondary', close: false, run: () => download(pdf.blob, pdf.filename) },

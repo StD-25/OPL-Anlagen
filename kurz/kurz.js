@@ -1,22 +1,38 @@
 // Kurznachricht: schnell einen offenen Punkt erfassen.
-// Nutzt dieselbe Datenbank wie die Haupt-App OPL-Maschine.
+// Nutzt dieselbe Datenbank und Anmeldung wie die Haupt-App OPL-Maschine.
 import * as model from '../js/model.js';
-import { toast, objectURL, releaseObjectURLs } from '../js/core/ui.js';
+import { esc, toast, objectURL, releaseObjectURLs } from '../js/core/ui.js';
 import { formatDateTime } from '../js/core/filename.js';
 import { singlePerson } from '../js/core/personPicker.js';
-import { areaPicker } from '../js/core/areaPicker.js';
+import { choicePicker } from '../js/core/choicePicker.js';
 import { registerServiceWorker } from '../js/core/swUpdate.js';
 
 const $ = (id) => document.getElementById(id);
+let user;
+let anlagen = [];
+let anlage;
+let gewerk;
 let assignee;
-const area = areaPicker($('areaPicker'), { areas: await model.listAreas() });
 let files = [];
 
 async function fill() {
   $('stamp').textContent = formatDateTime(Date.now());
-  const current = assignee?.getValue() || '';
-  assignee = singlePerson($('assigneePicker'), { value: current, persons: await model.listPersons(), id: 'assignee' });
-  if (!$('author').value) $('author').value = await model.getSetting('myName');
+  user = await model.getCurrentUser();
+  $('loginHint').hidden = !!user;
+  $('quickForm').hidden = !user;
+  if (!user) return;
+  $('author').innerHTML = `Erfasst von <b>${esc(user.name)}</b>`;
+  anlagen = await model.visibleAnlagen(user);
+  const current = anlage?.getValue() || model.anlageLabel(await model.currentAnlage(user));
+  anlage = choicePicker($('anlagePicker'), {
+    value: current,
+    options: anlagen.map(model.anlageLabel),
+    placeholder: anlagen.length ? 'Anlage auswählen' : 'Keine Anlage zugewiesen',
+  });
+  const currentGewerk = gewerk?.getValue() || '';
+  gewerk = choicePicker($('gewerkPicker'), { value: currentGewerk, options: await model.listGewerke(), placeholder: 'Gewerk auswählen' });
+  const currentAssignee = assignee?.getValue() || '';
+  assignee = singlePerson($('assigneePicker'), { value: currentAssignee, persons: await model.listPersons(), id: 'assignee' });
 }
 
 function renderPhotos() {
@@ -39,7 +55,7 @@ for (const id of ['camera', 'gallery']) {
 function reset() {
   $('text').value = '';
   $('dueDate').value = '';
-  area.reset();
+  gewerk.reset();
   assignee.reset();
   files = [];
   renderPhotos();
@@ -54,30 +70,29 @@ $('cancel').onclick = () => {
 $('quickForm').onsubmit = async (e) => {
   e.preventDefault();
   const text = $('text').value.trim();
+  const chosen = anlagen.find((a) => model.anlageLabel(a) === anlage.getValue());
+  if (!chosen) {
+    toast('Bitte eine Anlage auswählen.');
+    return;
+  }
   if (!text) {
     toast('Bitte einen offenen Punkt/eine Beschreibung eingeben.');
     $('text').focus();
     return;
   }
-  if (area.isOtherEmpty()) {
-    toast('Bitte den Bereich eingeben.');
-    area.focusOther();
-    return;
-  }
-  const author = $('author').value.trim();
   $('save').disabled = true;
   $('save').textContent = 'Speichert …';
   try {
     await model.addQuickMessage({
-      author,
+      user,
+      anlage: chosen,
       text,
-      area: area.getValue(),
+      gewerk: gewerk.getValue(),
       assignee: assignee.getValue(),
       dueDate: $('dueDate').value,
       files,
     });
-    // Ersten eingegebenen Namen als „Mein Name“ merken
-    if (author && !(await model.getSetting('myName'))) await model.setSetting('myName', author);
+    await model.setCurrentAnlage(chosen.id);
     toast('Gespeichert – als offene Aufgabe übernommen');
     reset();
   } catch (err) {

@@ -2,14 +2,15 @@ import * as model from '../model.js';
 import { app, esc, setHeader, setActiveTab, toast, confirmDialog, objectURL, askDoneNote } from '../core/ui.js';
 import { formatDateTime } from '../core/filename.js';
 import { singlePerson } from '../core/personPicker.js';
-import { areaPicker } from '../core/areaPicker.js';
+import { choicePicker } from '../core/choicePicker.js';
 
 export async function render({ id, pid }) {
   const report = await model.getReport(id);
-  if (!report) { location.hash = '#/'; return; }
+  const user = await model.getCurrentUser();
+  if (!report || !(await model.visibleAnlagen(user)).some((a) => a.id === report.anlageId)) { location.hash = '#/'; return; }
   const isNew = pid === 'new';
   const point = isNew
-    ? { reportId: id, area: '', remark: '', assignee: '', dueDate: '', isTodo: true }
+    ? { reportId: id, gewerk: '', remark: '', assignee: '', dueDate: '', isTodo: true, author: user.name }
     : await model.getPoint(pid);
   if (!point) { location.hash = `#/report/${id}`; return; }
 
@@ -20,14 +21,15 @@ export async function render({ id, pid }) {
   const existingPhotos = isNew ? [] : await model.getPhotos(pid);
   const removedPhotoIds = [];
   const newFiles = [];
-  const persons = [...(await model.listPersons()), ...model.splitNames(report.participants)];
+  const persons = await model.listPersons();
 
   app().innerHTML = `
     <form id="pointForm">
-      <div class="meta">${esc(model.reportTitle(report))} · ${formatDateTime(point.createdAt || Date.now())}</div>
+      <div class="meta">${esc(model.reportLabel(report))}</div>
+      <div class="meta">Erfasst ${formatDateTime(point.createdAt || Date.now())}${point.author ? ` von <b>${esc(point.author)}</b>` : ''}</div>
 
-      <label>Bereich${report.reason === 'kurznachricht' ? ' (optional)' : ''}</label>
-      <div id="areaPicker"></div>
+      <label>Gewerk${report.reason === 'kurznachricht' ? ' <span class="meta">(optional)</span>' : ''}</label>
+      <div id="gewerkPicker"></div>
 
       <label for="remark">Offener Punkt/Beschreibung</label>
       <textarea id="remark" placeholder="Was ist offen bzw. aufgefallen?">${esc(point.remark)}</textarea>
@@ -65,7 +67,7 @@ export async function render({ id, pid }) {
 
   const form = document.getElementById('pointForm');
 
-  const area = areaPicker(document.getElementById('areaPicker'), { value: point.area, areas: await model.listAreas() });
+  const gewerk = choicePicker(document.getElementById('gewerkPicker'), { value: point.gewerk, options: await model.listGewerke(), placeholder: 'Gewerk auswählen' });
   const assignee = singlePerson(document.getElementById('assigneePicker'), { value: point.assignee, persons, id: 'assignee' });
 
   const photosEl = document.getElementById('photos');
@@ -114,15 +116,14 @@ export async function render({ id, pid }) {
 
   form.onsubmit = async (e) => {
     e.preventDefault();
-    if (area.isOtherEmpty()) { toast('Bitte den Bereich eingeben.'); area.focusOther(); return; }
-    const areaValue = area.getValue();
+    const gewerkValue = gewerk.getValue();
     const remark = document.getElementById('remark').value.trim();
-    if (!areaValue && report.reason !== 'kurznachricht') { toast('Bitte einen Bereich auswählen.'); return; }
+    if (!gewerkValue && report.reason !== 'kurznachricht') { toast('Bitte ein Gewerk auswählen.'); return; }
     if (!remark && !newFiles.length && !existingPhotos.length) { toast('Bitte einen offenen Punkt/eine Beschreibung oder ein Foto erfassen.'); return; }
     const saveBtn = document.getElementById('save');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Speichert …';
-    point.area = areaValue;
+    point.gewerk = gewerkValue;
     point.remark = remark;
     point.assignee = assignee.getValue();
     point.dueDate = document.getElementById('dueDate').value;
@@ -131,6 +132,7 @@ export async function render({ id, pid }) {
     if (doneEl && doneEl.checked !== !!point.done) {
       point.done = doneEl.checked;
       point.doneAt = doneEl.checked ? Date.now() : null;
+      point.doneBy = doneEl.checked ? user.name : '';
     }
     if (doneEl) point.doneNote = point.done ? document.getElementById('doneNote').value.trim() : '';
     try {
@@ -147,7 +149,7 @@ export async function render({ id, pid }) {
 
   const delBtn = document.getElementById('deletePoint');
   if (delBtn) delBtn.onclick = async () => {
-    if (await confirmDialog('Diesen Punkt mit Fotos löschen?', { ok: 'Löschen', danger: true })) {
+    if (await confirmDialog(`Wollen Sie Punkt #${point.no} wirklich löschen?\n\nDer Punkt wird mit allen Fotos endgültig entfernt.`, { ok: 'Löschen', danger: true })) {
       await model.deletePoint(pid);
       toast('Punkt gelöscht');
       location.hash = back;

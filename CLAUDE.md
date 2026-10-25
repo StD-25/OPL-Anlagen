@@ -1,6 +1,14 @@
 # OPL-Maschine – Hinweise für Claude
 
-Neue App, entstanden als Kopie der App **Besprechungsprotokoll** (`StD-25/Besprechungs-App`). Sie soll schrittweise zur **OPL-App** umgebaut werden; den fachlichen Inhalt beschreibt der Nutzer. Solange nichts anderes gesagt ist, funktioniert sie noch wie das Besprechungsprotokoll (Berichte, Punkte, Aufgaben, Archiv, PDF, Kurznachricht).
+OPL = **Offene Punkteliste** für Anlagen/Maschinen. Entstanden als Kopie der App **Besprechungsprotokoll** (`StD-25/Besprechungs-App`), wird schrittweise umgebaut.
+
+## Fachlich (Stand 2026-10-26)
+- **Benutzerverwaltung** mit Rollen Administrator / Projektleiter / Benutzer (`RIGHTS` in `js/model.js`). Anmeldung beim Start (optionale PIN), erster Start legt den Administrator an. Daten in `settings` (`users`, `currentUserId`).
+- **Anlagen** (Nummer + Name, `settings.anlagen`): anlegen dürfen Administrator und Projektleiter. Der Administrator weist Benutzern Anlagen zu; der Administrator sieht alle.
+- Auf der Startseite oben **Anlage wählen**; Berichte gehören zu einer Anlage (`anlageId`, `anlageNr`, `anlageName`). Keine Teilnehmer und kein Bereich mehr.
+- Punkt: **Gewerk** (Elektrik, Mechanik, Programmierung, Projektleitung, Fertigung, Konstruktion; pflegbar), „Erfasst von“ (angemeldeter Benutzer) mit Datum.
+- Benutzer erfassen, ändern und löschen Punkte; Berichte löschen nur Projektleiter und Administrator.
+- Hinweis: Alle Daten liegen nur auf dem jeweiligen Gerät, es gibt keinen gemeinsamen Server.
 
 - Repository: `StD-25/OPL-Anlagen` · Online: https://std-25.github.io/OPL-Anlagen/ (Kurznachricht: `/kurz/`, Name „OPL-Kurznachricht“)
 - Datenbank `opl-maschine`, Cache-Präfix `opl-maschine-`, sessionStorage-Präfix `opl-maschine:`
@@ -10,14 +18,14 @@ Neue App, entstanden als Kopie der App **Besprechungsprotokoll** (`StD-25/Bespre
 ## Technik
 - Reines HTML/CSS/JavaScript (ES-Module), **kein Build-Schritt**. Läuft direkt über GitHub Pages (Branch `main`, Ordner `/`).
 - PWA für **Android/Chrome**: `manifest.webmanifest`, `service-worker.js` (offline), Icons in `icons/`.
-- Daten **nur lokal auf dem Handy** in IndexedDB (`js/core/db.js`), Stores: `reports`, `points`, `photos` (Fotos getrennt), `persons`, `settings`.
+- Daten **nur lokal auf dem Handy** in IndexedDB (`js/core/db.js`), Stores: `reports`, `points`, `photos` (Fotos getrennt), `persons`, `settings` (auch Benutzer, Anlagen, Gewerke).
 - Bibliotheken liegen lokal in `vendor/` (jsPDF + autotable, JSZip, PDF.js 3.11) – keine CDNs (offline).
 - Aufbau:
   - `js/config.js`: Name, Version, Standardwerte
   - `js/model.js`: Fachlogik
   - `js/export.js`: PDFs, Bilder-ZIP
   - `js/views/*`: Ansichten mit Hash-Router in `js/app.js`
-  - `js/core/*`: wiederverwendbare Bausteine (`db`, `pdf`, `pdfPreview`, `picker`, `areaPicker`, `personPicker`, `listEditor`, `share`, `image`, `filename`, `swUpdate`, `ui`)
+  - `js/core/*`: wiederverwendbare Bausteine (`db`, `pdf`, `pdfPreview`, `picker`, `choicePicker`, `personPicker`, `listEditor`, `share`, `image`, `filename`, `swUpdate`, `ui`)
   - `kurz/`: Kurznachricht-App mit eigenem Manifest und Icon; nutzt dieselbe Datenbank
 
 ## Pflicht bei jeder Änderung
@@ -40,10 +48,10 @@ Neue App, entstanden als Kopie der App **Besprechungsprotokoll** (`StD-25/Bespre
 - Auswahl aus Listen über das **dunkle Auswahlfenster** (`js/core/picker.js`): `pickOne` (Einfachauswahl, 9 Zeilen, schließt beim Antippen), `pickMany` (Mehrfachauswahl mit OK, „＋ Neue Person…“). Kein `<datalist>` (geht auf Android schlecht), kein `<select multiple>`.
 - Listen: **neueste oben**. Einstellungs-Abschnitte **aufklappbar** (`<details>`, Zustand bleibt offen).
 - Bezeichnungen: „Neuer Punkt“, „Offener Punkt/Beschreibung“, „Zuständigkeit“, „Erledigen bis“.
-- Personen, Gründe der Besprechung und Bereiche sind in den Einstellungen pflegbar; jemals eingetragene Personen sind auswählbar.
+- Personen, Gründe und Gewerke sind in den Einstellungen pflegbar; jemals eingetragene Personen sind auswählbar.
 - Beim Erledigen eines Punkts: Fenster mit optionaler Bemerkung; diese steht im PDF in der Spalte **Status**.
 - PDF:
   - klein halten, Fotos nur als Vorschaubilder (240 px); Originalfotos separat als ZIP
-  - Dateiname `Grund_JJJJ-MM-TT_HH-MM_Vxx.pdf` (Version zweistellig, steigt nur bei geänderten Inhalten)
+  - Dateiname `Anlagennr_Grund_JJJJ-MM-TT_HH-MM_Vxx.pdf` (Version zweistellig, steigt nur bei geänderten Inhalten)
   - nach dem Erstellen Vorschau (PDF.js), dann E-Mail (Teilen-Dialog) / Speichern; Schließen → Startseite
 - Nach dem Speichern eines Berichts oder einer Kurznachricht springt die App sinnvoll zurück; Updates werden automatisch übernommen (Hinweis „App wurde aktualisiert“).

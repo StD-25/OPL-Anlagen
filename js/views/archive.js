@@ -1,6 +1,6 @@
 import * as model from '../model.js';
 import { app, esc, setHeader, setActiveTab } from '../core/ui.js';
-import { reportCards, bindReportCards } from './home.js';
+import { reportCards, bindReportCards, anlageSelect } from './home.js';
 
 const SORTS = {
   newest: { label: 'Neueste zuerst', fn: (a, b) => b.createdAt - a.createdAt },
@@ -14,18 +14,22 @@ const lower = (text) => String(text || '').toLocaleLowerCase('de');
 export async function render() {
   setHeader('Archiv');
   setActiveTab('archive');
-  const reports = await model.listReports('archived');
+  const user = await model.getCurrentUser();
+  app().innerHTML = '<div class="card"><label style="margin-top:0">Anlage</label><div id="anlage"></div></div><div id="archiveBody"></div>';
+  const anlage = await anlageSelect(document.getElementById('anlage'), user, '#/archive');
+  if (!anlage) return;
+  const reports = await model.listReports('archived', anlage.id);
   const groups = [...new Set(reports.map(model.reportGroup))].sort((a, b) => a.localeCompare(b, 'de'));
   if (filters.group && !groups.includes(filters.group)) filters.group = '';
 
-  // Suchtext je Bericht: Name, Teilnehmer und alle „Offener Punkt/Beschreibung“-Texte
+  // Suchtext je Bericht: Name, Ersteller und alle „Offener Punkt/Beschreibung“-Texte
   const haystack = new Map();
   for (const r of reports) {
     const points = await model.getPoints(r.id);
-    haystack.set(r.id, lower([model.reportTitle(r), r.participants, ...points.flatMap((p) => [p.remark, p.doneNote])].join('\n')));
+    haystack.set(r.id, lower([model.reportTitle(r), r.createdBy, ...points.flatMap((p) => [p.remark, p.doneNote, p.author])].join('\n')));
   }
 
-  app().innerHTML = `
+  document.getElementById('archiveBody').innerHTML = `
     <div class="filters">
       <select id="fGroup">
         <option value="">Alle Gründe</option>

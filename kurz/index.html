@@ -18,14 +18,20 @@
         <img src="../icons/kurz-192.png" alt="">
         <h1>Kurznachricht</h1>
       </div>
+      <div class="quick-body" id="loginHint" hidden>
+        <p>Bitte zuerst in OPL-Maschine anmelden.</p>
+        <a class="btn block" href="../">Zur Anmeldung</a>
+      </div>
       <form class="quick-body" id="quickForm" novalidate>
         <div class="stamp" id="stamp"></div>
 
-        <label for="author">Name</label>
-        <input type="text" id="author" autocomplete="name" placeholder="Dein Name">
+        <div class="meta" id="author"></div>
 
-        <label>Bereich <span class="meta">(optional)</span></label>
-        <div id="areaPicker"></div>
+        <label>Anlage *</label>
+        <div id="anlagePicker"></div>
+
+        <label>Gewerk <span class="meta">(optional)</span></label>
+        <div id="gewerkPicker"></div>
 
         <label for="text">Offener Punkt/Beschreibung *</label>
         <input type="text" id="text" required placeholder="Was ist zu erledigen?">

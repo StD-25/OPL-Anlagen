@@ -6,6 +6,9 @@ import * as pointForm from './views/pointForm.js';
 import * as todos from './views/todos.js';
 import * as archive from './views/archive.js';
 import * as settings from './views/settings.js';
+import * as login from './views/login.js';
+import * as admin from './views/admin.js';
+import { getCurrentUser } from './model.js';
 
 const routes = [
   [/^#\/report\/([^/]+)\/point\/([^/]+)$/, (m) => pointForm.render({ id: m[1], pid: m[2] })],
@@ -13,6 +16,8 @@ const routes = [
   [/^#\/todos$/, () => todos.render()],
   [/^#\/archive$/, () => archive.render()],
   [/^#\/settings$/, () => settings.render()],
+  [/^#\/user\/([^/]+)$/, (m) => admin.renderUser({ id: m[1] })],
+  [/^#\/anlage\/([^/]+)$/, (m) => admin.renderAnlage({ id: m[1] })],
   [/.*/, () => home.render()],
 ];
 
@@ -20,6 +25,13 @@ async function route() {
   releaseObjectURLs();
   document.getElementById('app').classList.remove('split');
   const hash = location.hash || '#/';
+  // Ohne Anmeldung nur die Anmeldeseite
+  const user = await getCurrentUser();
+  document.body.classList.toggle('logged-out', !user);
+  if (!user) {
+    await login.render();
+    return;
+  }
   for (const [re, handler] of routes) {
     const m = hash.match(re);
     if (m) {

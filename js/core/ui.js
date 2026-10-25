@@ -124,3 +124,9 @@ export function releaseObjectURLs() {
   (window.__urls || []).forEach((u) => URL.revokeObjectURL(u));
   window.__urls = [];
 }
+
+// Zu einer Ansicht wechseln – auch neu zeichnen, wenn sie schon angezeigt wird
+export function navigate(hash) {
+  if (location.hash === hash) window.dispatchEvent(new HashChangeEvent('hashchange'));
+  else location.hash = hash;
+}
