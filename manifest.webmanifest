@@ -1,7 +1,8 @@
 {
-  "name": "Besprechungsprotokoll",
-  "short_name": "Protokoll",
-  "description": "Auffälligkeiten aus Rundgängen und Besprechungen erfassen, als PDF versenden und als Aufgaben verfolgen.",
+  "id": "./",
+  "name": "OPL-Maschine",
+  "short_name": "OPL-Maschine",
+  "description": "OPL-Maschine – erfassen, als PDF versenden und als Aufgaben verfolgen.",
   "lang": "de",
   "start_url": "./",
   "scope": "./",

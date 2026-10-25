@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Kurznachricht",
-  "short_name": "Kurznachricht",
-  "description": "Offenen Punkt schnell erfassen – wird als Aufgabe ins Besprechungsprotokoll übernommen.",
+  "name": "OPL-Kurznachricht",
+  "short_name": "OPL-Kurz",
+  "description": "Offenen Punkt schnell erfassen – wird als Aufgabe in OPL-Maschine übernommen.",
   "lang": "de",
   "start_url": "./",
   "scope": "./",

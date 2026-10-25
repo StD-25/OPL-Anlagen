@@ -1,4 +1,6 @@
-# Besprechungsprotokoll
+# OPL-Maschine
+
+> Basiert auf der App „Besprechungsprotokoll“ (StD-25/Besprechungs-App) und wird schrittweise zur OPL-App umgebaut.
 
 Web-App (PWA) zum Erfassen offener Punkte bei Rundgängen und Besprechungen
 (Safety Walk, Poolmanager Besprechung, Reko Produktion, Sonstige) – mit Fotos,
@@ -29,20 +31,20 @@ Jede Kurznachricht wird automatisch als offene Aufgabe in den Bericht
 „Kurznachricht TT.MM.JJJJ“ des jeweiligen Tages übernommen.
 
 ## Veröffentlichen über GitHub Pages
-1. Repository: https://github.com/StD-25/Besprechungs-App
+1. Repository: https://github.com/StD-25/OPL-Anlagen
 2. Den Inhalt dieses Ordners hochladen bzw. pushen:
    ```
-   git remote add origin https://github.com/StD-25/Besprechungs-App.git
+   git remote add origin https://github.com/StD-25/OPL-Anlagen.git
    git push -u origin main
    ```
 3. Im Repository: **Settings → Pages → Source: „Deploy from a branch“, Branch `main`, Ordner `/ (root)`** → Speichern.
-4. Nach ca. 1 Minute ist die App erreichbar unter https://std-25.github.io/Besprechungs-App/.
+4. Nach ca. 1 Minute ist die App erreichbar unter https://std-25.github.io/OPL-Anlagen/.
 
 ## Auf dem Android-Handy als Icon installieren
 1. Die Adresse in **Chrome** öffnen.
 2. Menü (⋮) → **„App installieren“** bzw. **„Zum Startbildschirm hinzufügen“**.
-3. Die App startet nun über das Icon „Protokoll“ – auch ohne Internet.
-4. Für die Kurznachricht zusätzlich https://std-25.github.io/Besprechungs-App/kurz/ öffnen
+3. Die App startet nun über das Icon „OPL-Maschine“ – auch ohne Internet.
+4. Für die Kurznachricht zusätzlich https://std-25.github.io/OPL-Anlagen/kurz/ öffnen
    und ebenfalls ⋮ → „App installieren“ wählen. Es erscheint ein zweites Icon mit „K“.
 
 ## Hinweise

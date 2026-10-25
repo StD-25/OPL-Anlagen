@@ -2,6 +2,7 @@ import * as model from '../model.js';
 import { app, esc, setHeader, setActiveTab, toast } from '../core/ui.js';
 import { formatDateTime } from '../core/filename.js';
 import { multiPerson } from '../core/personPicker.js';
+import { APP_NAME } from '../config.js';
 
 export async function reportCards(reports) {
   if (!reports.length) return '<p class="empty">Keine Berichte vorhanden.</p>';
@@ -27,7 +28,7 @@ export function bindReportCards(root) {
 }
 
 export async function render() {
-  setHeader('Besprechungsprotokoll');
+  setHeader(APP_NAME);
   setActiveTab('home');
   const reports = await model.listReports('open');
   const reasons = await model.listReasons();

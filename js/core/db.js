@@ -1,5 +1,6 @@
 // Generischer IndexedDB-Wrapper (wiederverwendbar).
-const DB_NAME = 'besprechungsprotokoll';
+// Eigener Name je App – mehrere Apps unter std-25.github.io teilen sich sonst die Daten
+const DB_NAME = 'opl-maschine';
 const DB_VERSION = 2;
 
 let dbPromise;

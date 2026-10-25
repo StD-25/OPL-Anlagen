@@ -11,18 +11,18 @@ const STORES = ['reports', 'points', 'photos', 'persons', 'settings'];
 const openSections = new Set(); // während der Sitzung gemerkt
 
 async function exportBackup() {
-  const data = { app: 'besprechungsprotokoll', version: 1, exportedAt: Date.now() };
+  const data = { app: 'opl-maschine', version: 1, exportedAt: Date.now() };
   for (const s of STORES) data[s] = await db.getAll(s);
   data.photos = await Promise.all(data.photos.map(async (p) => ({
     ...p, full: await blobToDataURL(p.full), thumb: await blobToDataURL(p.thumb),
   })));
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-  download(blob, buildFilename('Backup Besprechungsprotokoll', new Date(), 'json'));
+  download(blob, buildFilename('Backup OPL-Maschine', new Date(), 'json'));
 }
 
 async function importBackup(file) {
   const data = JSON.parse(await file.text());
-  if (data.app !== 'besprechungsprotokoll') throw new Error('Keine gültige Sicherungsdatei');
+  if (data.app !== 'opl-maschine') throw new Error('Keine gültige Sicherungsdatei');
   for (const s of STORES) {
     for (const item of data[s] || []) {
       if (s === 'photos') {

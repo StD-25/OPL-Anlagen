@@ -1,5 +1,5 @@
 // Kurznachricht: schnell einen offenen Punkt erfassen.
-// Nutzt dieselbe Datenbank wie das Besprechungsprotokoll (gleiche Herkunft).
+// Nutzt dieselbe Datenbank wie die Haupt-App OPL-Maschine.
 import * as model from '../js/model.js';
 import { toast, objectURL, releaseObjectURLs } from '../js/core/ui.js';
 import { formatDateTime } from '../js/core/filename.js';
